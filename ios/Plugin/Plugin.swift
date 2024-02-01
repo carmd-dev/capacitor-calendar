@@ -288,11 +288,21 @@ public class CapacitorCalendar: CAPPlugin {
     }
     
     @objc func openCalendar(_ call: CAPPluginCall) {
-        guard let url = URL(string: "calshow://") else {
+        var startInterval = 0.0
+        if let date = call.options["date"] as? Double{
+            startInterval = date / 1000.0
+        }
+        let openDate = NSDate(timeIntervalSince1970: startInterval)
+        let interval = openDate.timeIntervalSinceReferenceDate
+        guard let url = URL(string: "calshow:\(interval)") else {
             call.reject("Unknown error")
             return
         }
-        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        
+        DispatchQueue.main.async {
+            UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        }
+        
         call.resolve()
     }
     
