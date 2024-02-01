@@ -1,0 +1,50 @@
+{
+  "name": "capacitor-calendar",
+  "version": "1.0.6",
+  "description": "Simple native calendar handling for Capacitor",
+  "main": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "scripts": {
+    "build": "npm run clean && tsc",
+    "clean": "rimraf ./dist",
+    "watch": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "author": "Vladimír Fojtík <vladimir@fojtik.dev>, Břetislav Štěpán <info@bretislavstepan.cz>",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/core": "^3.3.4"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^3.3.4",
+    "@capacitor/ios": "^3.3.4",
+    "rimraf": "^3.0.0",
+    "typescript": "^4.5.4"
+  },
+  "files": [
+    "dist/",
+    "ios/",
+    "android/",
+    "CapacitorCalendar.podspec"
+  ],
+  "keywords": [
+    "capacitor",
+    "plugin",
+    "native"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fir3st/capacitor-calendar"
+  },
+  "bugs": {
+    "url": "https://github.com/Fir3st/capacitor-calendar/issues"
+  }
+}
