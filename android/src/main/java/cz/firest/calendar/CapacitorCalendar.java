@@ -120,67 +120,41 @@ public class CapacitorCalendar extends Plugin {
     }
 
     protected void createCalendarEvent(PluginCall call) {
-        ContentResolver cr = this.getActivity().getContentResolver();
-        ContentValues values = new ContentValues();
-        JSObject data = call.getData();
+      JSObject data = call.getData();
+      try {
+        long startTime = data.has("startDate") ? data.getLong("startDate") : new Date().getTime();
+        long endTime = data.has("endDate") ? data.getLong("endDate") : new Date().getTime();
+        String title = data.has("title") ? data.getString("title") : "";
+        final boolean hasAllDayEventConfig = data.has("allDay");
 
-        try {
-            Long startTime = data.has("startDate") ? data.getLong("startDate") : new Date().getTime();
-            Long endTime = data.has("endDate") ? data.getLong("endDate") : new Date().getTime();
-            final boolean hasAllDayEventConfig = data.has("allDay");
+        final Intent calIntent = new Intent(Intent.ACTION_EDIT)
+          .setType("vnd.android.cursor.item/event")
+          .putExtra("title", title)
+          .putExtra("hasAlarm", 1);
 
-            if (hasAllDayEventConfig != false) {
-                final boolean allDayEventConfig = data.getBoolean("allDay");
-                values.put(Events.EVENT_TIMEZONE, TimeZone.getDefault().getID());
-                values.put(Events.ALL_DAY, allDayEventConfig);
-                values.put(Events.DTSTART, startTime);
-                values.put(Events.DTEND, endTime);
-            } else {
-                final boolean allDayEvent = isAllDayEvent(new Date(startTime), new Date(endTime));
-                if (allDayEvent) {
-                    values.put(Events.EVENT_TIMEZONE, "UTC");
-                    values.put(Events.ALL_DAY, true);
-                    values.put(Events.DTSTART, startTime + TimeZone.getDefault().getOffset(startTime));
-                    values.put(Events.DTEND, endTime + TimeZone.getDefault().getOffset(endTime));
-                } else {
-                    values.put(Events.EVENT_TIMEZONE, TimeZone.getDefault().getID());
-                    values.put(Events.ALL_DAY, false);
-                    values.put(Events.DTSTART, startTime);
-                    values.put(Events.DTEND, endTime);
-                }
-            }
-
-            String selectedCalendarId = data.has("calendarId") ? data.getString("calendarId").replaceAll("\"","") : "";
-            List<String> activeCalendars = Arrays.asList(getActiveCalendarIds());
-            int calendarId = data.has("calendarId") && activeCalendars.contains(selectedCalendarId)
-                    ? Integer.parseInt(selectedCalendarId)
-                    : getDefaultCalendarId();
-
-            values.put(Events.TITLE, call.getString("title", ""));
-            values.put(Events.DESCRIPTION, call.getString("notes", ""));
-            values.put(Events.EVENT_LOCATION, call.getString("location", ""));
-            values.put(Events.AVAILABILITY, Events.AVAILABILITY_BUSY);
-            values.put(CalendarContract.Events.CALENDAR_ID, calendarId);
-        } catch (Exception e) {
-            Log.e(LOG_TAG, "Fail to parse data", e);
-            call.reject(e.getMessage());
+        if (hasAllDayEventConfig) {
+          calIntent.putExtra("allDay", true)
+            .putExtra("beginTime", startTime + TimeZone.getDefault().getOffset(startTime))
+            .putExtra("endTime", endTime + TimeZone.getDefault().getOffset(endTime))
+            .putExtra("eventTimezone", TimeZone.getDefault().getID());
+        } else {
+          calIntent.putExtra("allDay", false)
+            .putExtra("beginTime", startTime + TimeZone.getDefault().getOffset(startTime))
+            .putExtra("endTime", endTime + TimeZone.getDefault().getOffset(endTime));
         }
 
-        try {
-            Uri uri = cr.insert(Events.CONTENT_URI, values);
-            String createdEventID = uri.getLastPathSegment();
-            Log.d(LOG_TAG, "Created event with ID " + createdEventID);
-
-            JSObject ret = new JSObject();
-            ret.put("id", createdEventID);
-            call.resolve(ret);
-        } catch (SecurityException e) {
-            Log.e(LOG_TAG, "Permission denied", e);
-            call.error(e.getMessage());
-        } catch (Exception e) {
-            Log.e(LOG_TAG, "Fail to create an event", e);
-            call.error(e.getMessage());
+        if (data.has("location")) {
+          calIntent.putExtra("eventLocation", data.getString("location"));
         }
+        if (data.has("notes")) {
+          calIntent.putExtra("description", data.getString("notes"));
+        }
+
+        startActivityForResult(call, calIntent, RESULT_CODE_OPENCAL);
+      } catch (Exception e) {
+        e.printStackTrace();
+        call.error(e.getMessage());
+      }
     }
 
     protected int getDefaultCalendarId() throws Exception {

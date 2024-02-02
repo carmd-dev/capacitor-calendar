@@ -1,20 +1,24 @@
 import Foundation
 import Capacitor
 import EventKit
+import EventKitUI
 
 /**
  * Please read the Capacitor iOS Plugin Development Guide
  * here: https://capacitorjs.com/docs/plugins/ios
  */
 @objc(CapacitorCalendar)
-public class CapacitorCalendar: CAPPlugin {
+public class CapacitorCalendar: CAPPlugin, EKEventEditViewDelegate {
+    public func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+        self.bridge?.viewController?.dismiss(animated: true)
+    }
+    
     
     let SEARCH_LIMIT_INTERVAL = 1000 * 24 * 60 * 60;
     
     let store = EKEventStore()
     
-    @objc func createEvent(_ call: CAPPluginCall) {
-        
+    func createEventInteractive(_ call: CAPPluginCall) {
         guard let title = call.getString("title"), !title.isEmpty else {
             let msg = "Must provide title property"
             print(msg)
@@ -38,56 +42,78 @@ public class CapacitorCalendar: CAPPlugin {
             call.reject(msg)
             return
         }
-
-       
-
         
         let eventStartDate = Date(timeIntervalSince1970: startDate / 1000);
         
-        store.requestAccess(to: .event) { (accessGranted: Bool, error: Error?) in
-            if accessGranted && error == nil {
-                var calendar = self.store.defaultCalendarForNewEvents
-                if let identifier = call.getString("calendarId") {
-                    if let selectedCalendar = self.store.calendar(withIdentifier: identifier) {
-                        calendar = selectedCalendar
-                    }
-                }
+        var calendar = self.store.defaultCalendarForNewEvents
+        if let identifier = call.getString("calendarId") {
+            if let selectedCalendar = self.store.calendar(withIdentifier: identifier) {
+                calendar = selectedCalendar
+            }
+        }
 
-                let event = EKEvent.init(eventStore: self.store)
-                event.title = title
-                event.location = location
-                event.notes = notes
-                event.calendar = calendar
-                event.startDate = eventStartDate
+        let event = EKEvent.init(eventStore: self.store)
+        event.title = title
+        event.location = location
+        event.notes = notes
+        event.calendar = calendar
+        event.startDate = eventStartDate
 
-                if let allDay = call.getBool("allDay") {
-                    event.endDate = Date(timeIntervalSince1970: endDate / 1000)
-                    event.isAllDay = allDay
+        if let allDay = call.getBool("allDay") {
+            event.endDate = Date(timeIntervalSince1970: endDate / 1000)
+            event.isAllDay = allDay
+        } else {
+            let duration = Int(endDate - startDate);
+            let moduloDay = (duration / 1000) % (60 * 60 * 24);
+            if (moduloDay == 0) {
+                event.isAllDay = true;
+                event.endDate = Date(timeIntervalSince1970: (endDate / 1000) - 1)
+            } else {
+                event.endDate = Date(timeIntervalSince1970: endDate / 1000)
+            }
+        }
+
+
+        do {
+            DispatchQueue.main.async {
+                let eventEditController = EKEventEditViewController()
+                eventEditController.event = event
+                eventEditController.eventStore = self.store
+                eventEditController.editViewDelegate = self
+                self.bridge?.viewController?.present(eventEditController, animated: true)
+            }
+            
+            call.resolve()
+        } catch let error as NSError {
+            let msg = "Failed to save event with error: \(error)"
+            print(msg)
+            call.reject(msg)
+            return
+        }
+    }
+    
+    @objc func createEvent(_ call: CAPPluginCall) {
+        
+        
+        if #available(iOS 17.0, *) {
+            store.requestFullAccessToEvents { (accessGranted: Bool, error: Error?) in
+                if accessGranted && error == nil {
+                    self.createEventInteractive(call)
                 } else {
-                    let duration = Int(endDate - startDate);
-                    let moduloDay = (duration / 1000) % (60 * 60 * 24);
-                    if (moduloDay == 0) {
-                        event.isAllDay = true;
-                        event.endDate = Date(timeIntervalSince1970: (endDate / 1000) - 1)
-                    } else {
-                        event.endDate = Date(timeIntervalSince1970: endDate / 1000)
-                    }
-                }
-
-
-                do {
-                    try self.store.save(event, span: .thisEvent)
-                    call.resolve()
-                } catch let error as NSError {
-                    let msg = "Failed to save event with error: \(error)"
+                    let msg = "EK access denied: \(String(describing: error?.localizedDescription))"
                     print(msg)
                     call.reject(msg)
-                    return
                 }
-            } else {
-                let msg = "EK access denied: \(String(describing: error?.localizedDescription))"
-                print(msg)
-                call.reject(msg)
+            }
+        } else {
+            store.requestAccess(to: .event) { (accessGranted: Bool, error: Error?) in
+                if accessGranted && error == nil {
+                    self.createEventInteractive(call)
+                } else {
+                    let msg = "EK access denied: \(String(describing: error?.localizedDescription))"
+                    print(msg)
+                    call.reject(msg)
+                }
             }
         }
     }
