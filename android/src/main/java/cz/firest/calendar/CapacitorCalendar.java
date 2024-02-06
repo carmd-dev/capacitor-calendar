@@ -40,10 +40,10 @@ import java.util.TimeZone;
 import com.google.gson.Gson;
 
 @CapacitorPlugin(
-    name = "CapacitorCalendar",
-    permissions = {
-        @Permission(strings = { Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR }, alias = "calendar")
-    }
+        name = "CapacitorCalendar",
+        permissions = {
+                @Permission(strings = { Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR }, alias = "calendar")
+        }
 )
 public class CapacitorCalendar extends Plugin {
     static final Integer RESULT_CODE_OPENCAL = 1;
@@ -87,6 +87,24 @@ public class CapacitorCalendar extends Plugin {
         }
     }
 
+    @PermissionCallback
+    private void calendarPermsCallbackForGetAvailableCalendars(PluginCall call) {
+        if (!(getPermissionState("calendar") == PermissionState.GRANTED)) {
+            call.reject("Permission is required");
+        } else {
+            this.getAvailableCalendars(call);
+        }
+    }
+
+    @PermissionCallback
+    private void calendarPermsCallbackForCreateEvent(PluginCall call) {
+        if (!(getPermissionState("calendar") == PermissionState.GRANTED)) {
+            call.reject("Permission is required");
+        } else {
+            this.createEvent(call);
+        }
+    }
+
     @PluginMethod()
     public void openCalendar(PluginCall call) {
         if (!hasRequiredPermissions()) {
@@ -113,48 +131,48 @@ public class CapacitorCalendar extends Plugin {
     @PluginMethod()
     public void createEvent(PluginCall call) {
         if (!hasRequiredPermissions()) {
-            requestPermissionsCalendar(call);
+            requestPermissionForAlias("calendar", call, "calendarPermsCallbackForCreateEvent");
         } else {
             createCalendarEvent(call);
         }
     }
 
     protected void createCalendarEvent(PluginCall call) {
-      JSObject data = call.getData();
-      try {
-        long startTime = data.has("startDate") ? data.getLong("startDate") : new Date().getTime();
-        long endTime = data.has("endDate") ? data.getLong("endDate") : new Date().getTime();
-        String title = data.has("title") ? data.getString("title") : "";
-        final boolean hasAllDayEventConfig = data.has("allDay");
+        JSObject data = call.getData();
+        try {
+            long startTime = data.has("startDate") ? data.getLong("startDate") : new Date().getTime();
+            long endTime = data.has("endDate") ? data.getLong("endDate") : new Date().getTime();
+            String title = data.has("title") ? data.getString("title") : "";
+            final boolean hasAllDayEventConfig = data.has("allDay");
 
-        final Intent calIntent = new Intent(Intent.ACTION_EDIT)
-          .setType("vnd.android.cursor.item/event")
-          .putExtra("title", title)
-          .putExtra("hasAlarm", 1);
+            final Intent calIntent = new Intent(Intent.ACTION_EDIT)
+                    .setType("vnd.android.cursor.item/event")
+                    .putExtra("title", title)
+                    .putExtra("hasAlarm", 1);
 
-        if (hasAllDayEventConfig) {
-          calIntent.putExtra("allDay", true)
-            .putExtra("beginTime", startTime + TimeZone.getDefault().getOffset(startTime))
-            .putExtra("endTime", endTime + TimeZone.getDefault().getOffset(endTime))
-            .putExtra("eventTimezone", TimeZone.getDefault().getID());
-        } else {
-          calIntent.putExtra("allDay", false)
-            .putExtra("beginTime", startTime + TimeZone.getDefault().getOffset(startTime))
-            .putExtra("endTime", endTime + TimeZone.getDefault().getOffset(endTime));
+            if (hasAllDayEventConfig) {
+                calIntent.putExtra("allDay", true)
+                        .putExtra("beginTime", startTime + TimeZone.getDefault().getOffset(startTime))
+                        .putExtra("endTime", endTime + TimeZone.getDefault().getOffset(endTime))
+                        .putExtra("eventTimezone", TimeZone.getDefault().getID());
+            } else {
+                calIntent.putExtra("allDay", false)
+                        .putExtra("beginTime", startTime + TimeZone.getDefault().getOffset(startTime))
+                        .putExtra("endTime", endTime + TimeZone.getDefault().getOffset(endTime));
+            }
+
+            if (data.has("location")) {
+                calIntent.putExtra("eventLocation", data.getString("location"));
+            }
+            if (data.has("notes")) {
+                calIntent.putExtra("description", data.getString("notes"));
+            }
+
+            startActivityForResult(call, calIntent, RESULT_CODE_OPENCAL);
+        } catch (Exception e) {
+            e.printStackTrace();
+            call.error(e.getMessage());
         }
-
-        if (data.has("location")) {
-          calIntent.putExtra("eventLocation", data.getString("location"));
-        }
-        if (data.has("notes")) {
-          calIntent.putExtra("description", data.getString("notes"));
-        }
-
-        startActivityForResult(call, calIntent, RESULT_CODE_OPENCAL);
-      } catch (Exception e) {
-        e.printStackTrace();
-        call.error(e.getMessage());
-      }
     }
 
     protected int getDefaultCalendarId() throws Exception {
@@ -164,9 +182,9 @@ public class CapacitorCalendar extends Plugin {
 
         if (calendars != null && calendars.size() > 0) {
             for (Calendar calendar: calendars) {
-              if (calendar.defaultCalendar == true) {
-                calendarId = Integer.parseInt(calendar.id.trim());
-              }
+                if (calendar.defaultCalendar == true) {
+                    calendarId = Integer.parseInt(calendar.id.trim());
+                }
             }
         } else {
             throw new Exception("No calendars found.");
@@ -622,7 +640,7 @@ public class CapacitorCalendar extends Plugin {
     @PluginMethod()
     public void getAvailableCalendars(PluginCall call) {
         if (!hasRequiredPermissions()) {
-            requestPermissionsCalendar(call);
+            requestPermissionForAlias("calendar", call, "calendarPermsCallbackForGetAvailableCalendars");
         } else {
             List<Calendar> availableCalendars = getAvailableCalendarsList();
             JSObject ret = new JSObject();
@@ -652,12 +670,12 @@ public class CapacitorCalendar extends Plugin {
                 if (primaryCol != -1) {
                     boolean defaultCalendar = false;
                     if (defaultSelected == false && cursor.getInt(primaryCol) == 1) {
-                      defaultSelected = true;
-                      defaultCalendar = true;
+                        defaultSelected = true;
+                        defaultCalendar = true;
                     }
 
                     Calendar data = new Calendar(cursor.getString(col), cursor.getString(nameCol),
-                      cursor.getString(displayNameCol), defaultCalendar);
+                            cursor.getString(displayNameCol), defaultCalendar);
                     availableCalendars.add(data);
                 }
             } while (cursor.moveToNext());
@@ -691,8 +709,8 @@ public class CapacitorCalendar extends Plugin {
 
     protected Cursor queryEventInstances(long startFrom, long startTo, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         Uri.Builder builder = Instances.CONTENT_URI.buildUpon();
-            ContentUris.appendId(builder, startFrom);
-            ContentUris.appendId(builder, startTo);
+        ContentUris.appendId(builder, startFrom);
+        ContentUris.appendId(builder, startTo);
 
         return this.getActivity().getContentResolver().query(
                 builder.build(), projection, selection, selectionArgs, sortOrder);
@@ -702,7 +720,7 @@ public class CapacitorCalendar extends Plugin {
                                     String[] selectionArgs, String sortOrder) {
         try {
             return this.getActivity().getContentResolver().query(
-                CalendarContract.Calendars.CONTENT_URI, projection, selection, selectionArgs, sortOrder);
+                    CalendarContract.Calendars.CONTENT_URI, projection, selection, selectionArgs, sortOrder);
         }  catch (SecurityException e) {
             Log.e(LOG_TAG, "Permission denied", e);
             return null;
@@ -714,7 +732,7 @@ public class CapacitorCalendar extends Plugin {
                                  String[] selectionArgs, String sortOrder) {
         try {
             return this.getActivity().getContentResolver().query(
-                Events.CONTENT_URI, projection, selection, selectionArgs, sortOrder);
+                    Events.CONTENT_URI, projection, selection, selectionArgs, sortOrder);
         }  catch (SecurityException e) {
             Log.e(LOG_TAG, "Permission denied", e);
             return null;
